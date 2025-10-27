@@ -1,0 +1,774 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Training YOLOv8 on AMD RX6800XT with ROCm</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&amp;family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+    <style>
+        :root {
+            --primary: #1e293b;
+            --secondary: #64748b;
+            --accent: #3b82f6;
+            --muted: #f8fafc;
+            --border: #e2e8f0;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: var(--primary);
+        }
+        
+        .serif {
+            font-family: 'Playfair Display', serif;
+        }
+        
+        .toc-fixed {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 280px;
+            height: 100vh;
+            background: white;
+            border-right: 1px solid var(--border);
+            overflow-y: auto;
+            z-index: 50;
+            padding: 2rem 1.5rem;
+        }
+        
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+        }
+        
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            align-items: center;
+            min-height: 60vh;
+        }
+        
+        .code-block {
+            background: #1a1b26;
+            color: #a9b1d6;
+            border-radius: 8px;
+            padding: 1.5rem;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        
+        .code-block .comment {
+            color: #565f89;
+        }
+        
+        .code-block .keyword {
+            color: #bb9af7;
+        }
+        
+        .code-block .string {
+            color: #9ece6a;
+        }
+        
+        .citation {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .citation:hover {
+            text-decoration: underline;
+        }
+        
+        .section-header {
+            border-left: 4px solid var(--accent);
+            padding-left: 1.5rem;
+            margin: 3rem 0 2rem 0;
+        }
+        
+        .subsection-header {
+            border-left: 2px solid var(--secondary);
+            padding-left: 1rem;
+            margin: 2rem 0 1rem 0;
+        }
+        
+        .toc-link {
+            display: block;
+            padding: 0.5rem 0;
+            color: var(--secondary);
+            text-decoration: none;
+            border-bottom: 1px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .toc-link:hover {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+        }
+        
+        .toc-link.active {
+            color: var(--accent);
+            font-weight: 500;
+        }
+        
+        .highlight-box {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-left: 4px solid var(--accent);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        @media (max-width: 1024px) {
+            .toc-fixed {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            
+            .toc-fixed.open {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 0;
+            }
+            
+            .hero-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+  <base target="_blank">
+</head>
+
+  <body class="bg-gray-50">
+    <!-- Mobile Toggle Button -->
+    <button id="mobile-menu-toggle" class="lg:hidden fixed top-4 left-4 z-50 bg-white p-2 rounded-md shadow-lg">
+      <i class="fas fa-bars text-gray-700"></i>
+    </button>
+
+    <!-- Table of Contents -->
+    <nav class="toc-fixed">
+      <div class="mb-8">
+        <h2 class="serif text-xl font-bold text-gray-900 mb-4">Contents</h2>
+        <div class="space-y-1">
+          <a href="#introduction" class="toc-link">Introduction</a>
+          <a href="#environment" class="toc-link">Environment Setup</a>
+          <a href="#rocm-install" class="toc-link text-sm ml-4">ROCm Installation</a>
+          <a href="#gpu-config" class="toc-link text-sm ml-4">GPU Configuration</a>
+          <a href="#pytorch-install" class="toc-link text-sm ml-4">PyTorch Setup</a>
+          <a href="#yolov8-setup" class="toc-link">YOLOv8 &amp; Dataset</a>
+          <a href="#framework-install" class="toc-link text-sm ml-4">Framework Install</a>
+          <a href="#dataset-prep" class="toc-link text-sm ml-4">Dataset Preparation</a>
+          <a href="#training" class="toc-link">Training Process</a>
+          <a href="#training-command" class="toc-link text-sm ml-4">Training Command</a>
+          <a href="#monitoring" class="toc-link text-sm ml-4">Monitoring</a>
+          <a href="#optimization" class="toc-link">Optimization</a>
+          <a href="#rocm-features" class="toc-link text-sm ml-4">ROCm Features</a>
+          <a href="#advanced-tech" class="toc-link text-sm ml-4">Advanced Techniques</a>
+          <a href="#troubleshooting" class="toc-link text-sm ml-4">Troubleshooting</a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Hero Section -->
+      <section class="bg-white">
+        <div class="hero-grid max-w-7xl mx-auto px-8 py-16">
+          <div class="space-y-6">
+            <div class="space-y-4">
+              <h1 class="serif text-5xl font-bold text-gray-900 leading-tight">
+                Training YOLOv8 on
+                <em class="italic text-blue-600">AMD RX6800XT</em>
+                with ROCm
+              </h1>
+              <p class="text-xl text-gray-600 leading-relaxed">
+                A comprehensive guide to configuring, training, and optimizing computer vision models on AMD hardware
+              </p>
+            </div>
+
+            <div class="flex items-center space-x-6 text-sm text-gray-500">
+              <span class="flex items-center">
+                <i class="fas fa-microchip mr-2"></i>
+                AMD ROCm 6.0.2
+              </span>
+              <span class="flex items-center">
+                <i class="fas fa-ubuntu mr-2"></i>
+                Ubuntu 22.04.05 LTS
+              </span>
+              <span class="flex items-center">
+                <i class="fas fa-gpu mr-2"></i>
+                RX6800XT RDNA2
+              </span>
+            </div>
+          </div>
+
+          <div class="relative">
+            <img src="https://kimi-web-img.moonshot.cn/img/i.ebayimg.com/0944a3f2a4e7789f7141fc2bf7cf5e335864e724.jpg" alt="AMD Radeon RX6800XT GPU for deep learning" class="w-full h-80 object-cover rounded-lg shadow-2xl" size="large" aspect="wide" style="photo" query="AMD Radeon RX6800XT graphics card" referrerpolicy="no-referrer" data-modified="1" data-score="0.00"/>
+            <div class="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent rounded-lg"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Introduction -->
+      <section id="introduction" class="max-w-4xl mx-auto px-8 py-16">
+        <div class="section-header">
+          <h2 class="serif text-3xl font-bold text-gray-900">Introduction</h2>
+        </div>
+
+        <div class="prose prose-lg max-w-none">
+          <p class="text-xl text-gray-700 leading-relaxed mb-6">
+            This guide provides a comprehensive, step-by-step process for training the Ultralytics YOLOv8 object detection model on a custom dataset using an AMD Radeon RX6800XT GPU. The setup is specifically tailored for Ubuntu 22.04.05 LTS and leverages the AMD ROCm (Radeon Open Compute) software stack to enable high-performance GPU acceleration.
+          </p>
+
+          <div class="highlight-box">
+            <h3 class="font-semibold text-gray-900 mb-2">Key Requirements</h3>
+            <ul class="space-y-1 text-gray-700">
+              <li>• AMD Radeon RX6800XT GPU (RDNA2 architecture)</li>
+              <li>• Ubuntu 22.04.05 LTS operating system</li>
+              <li>• Labeled dataset in YOLOv8 format</li>
+              <li>• Basic familiarity with terminal commands</li>
+            </ul>
+          </div>
+
+          <p>
+            The instructions cover the entire workflow, from the initial environment setup and software installation to dataset preparation, model training, and performance optimization techniques designed to maximize the potential of your RX6800XT.
+          </p>
+        </div>
+      </section>
+
+      <!-- Environment Setup -->
+      <section id="environment" class="max-w-4xl mx-auto px-8 py-16 bg-white">
+        <div class="section-header">
+          <h2 class="serif text-3xl font-bold text-gray-900">Environment Setup for AMD ROCm</h2>
+        </div>
+
+        <p class="text-lg text-gray-700 mb-8">
+          The foundation for training YOLOv8 on an AMD GPU is a correctly configured ROCm environment. This section details the critical steps for installing the ROCm drivers and libraries, configuring the system specifically for the RX6800XT&#39;s RDNA2 architecture, and installing a compatible version of PyTorch.
+        </p>
+
+        <!-- ROCm Installation -->
+        <div id="rocm-install" class="subsection-header">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Installing ROCm Drivers and Libraries</h3>
+        </div>
+
+        <p class="text-gray-700 mb-6">
+          The installation of the ROCm stack is the first and most critical step. It involves downloading the official installer from AMD, executing the installation with specific flags to ensure stability, and verifying the installation.
+        </p>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">1. Downloading the AMDGPU-Installer Package</h4>
+            <p class="text-gray-700 mb-4">
+              The recommended method for installing ROCm on Ubuntu is to use the official
+              <code class="bg-gray-100 px-2 py-1 rounded">amdgpu-install</code> package provided by AMD. For Ubuntu 22.04, a stable version is ROCm 6.0.2, which corresponds to the Radeon Software for Linux version 23.40.2 <a href="https://blog.csdn.net/dr_chenseu/article/details/137966963" class="citation">[63]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Download the AMDGPU installer package</span>
+<span class="keyword">wget</span> https://repo.radeon.com/amdgpu-install/23.40.2/ubuntu/jammy/amdgpu-install_6.0.60002-1_all.deb
+
+<span class="comment"># Install the package</span>
+<span class="keyword">sudo apt install</span> ./amdgpu-install_6.0.60002-1_all.deb</pre>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">2. Installing ROCm with DKMS Override</h4>
+            <p class="text-gray-700 mb-4">
+              To avoid potential conflicts with existing kernel drivers, it&#39;s recommended to install ROCm without modifying the existing kernel modules using the
+              <code class="bg-gray-100 px-2 py-1 rounded">--no-dkms</code> flag <a href="https://blog.csdn.net/dr_chenseu/article/details/137966963" class="citation">[63]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Install ROCm without kernel module modifications</span>
+<span class="keyword">sudo amdgpu-install</span> --usecase=rocm --no-dkms</pre>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">3. Adding User to Required Groups</h4>
+            <p class="text-gray-700 mb-4">
+              Add your user account to the
+              <code class="bg-gray-100 px-2 py-1 rounded">render</code> and
+              <code class="bg-gray-100 px-2 py-1 rounded">video</code> groups to grant GPU access permissions <a href="https://blog.csdn.net/dr_chenseu/article/details/137966963" class="citation">[63]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Add user to required groups</span>
+<span class="keyword">sudo usermod</span> -a -G render $LOGNAME
+<span class="keyword">sudo usermod</span> -a -G video $LOGNAME
+
+<span class="comment"># Reboot required for changes to take effect</span>
+<span class="keyword">sudo reboot</span></pre>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">4. Verifying ROCm Installation</h4>
+            <p class="text-gray-700 mb-4">
+              After rebooting, verify the installation using the
+              <code class="bg-gray-100 px-2 py-1 rounded">rocm-smi</code> command <a href="https://blog.csdn.net/dr_chenseu/article/details/137966963" class="citation">[63]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Check GPU status and ROCm installation</span>
+<span class="keyword">rocm-smi</span></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- GPU Configuration -->
+        <div id="gpu-config" class="subsection-header mt-12">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Configuring the Environment for RX6800XT (RDNA2)</h3>
+        </div>
+
+        <p class="text-gray-700 mb-6">
+          The RX6800XT is based on AMD&#39;s RDNA2 architecture and requires specific configuration to ensure full compatibility and optimal performance.
+        </p>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Setting
+              <code>HSA_OVERRIDE_GFX_VERSION</code>
+            </h4>
+            <p class="text-gray-700 mb-4">
+              Set the
+              <code class="bg-gray-100 px-2 py-1 rounded">HSA_OVERRIDE_GFX_VERSION</code> environment variable to
+              <code class="bg-gray-100 px-2 py-1 rounded">10.3.0</code> for RDNA2 compatibility <a href="https://community.frame.work/t/installing-rocm-hiplib-on-ubuntu-22-04/50412" class="citation">[61]</a>
+              <a href="https://blog.csdn.net/2401_83179994/article/details/152044961" class="citation">[66]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Add to ~/.bashrc for persistence</span>
+<span class="keyword">echo</span> <span class="string">&#39;export HSA_OVERRIDE_GFX_VERSION=10.3.0&#39;</span> &gt;&gt; ~/.bashrc
+<span class="keyword">source</span> ~/.bashrc</pre>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Isolating the Dedicated GPU</h4>
+            <p class="text-gray-700 mb-4">
+              In systems with multiple GPUs, ensure ROCm applications use the RX6800XT by setting visibility variables <a href="https://community.frame.work/t/installing-rocm-hiplib-on-ubuntu-22-04/50412" class="citation">[61]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Add to ~/.bashrc to isolate RX6800XT</span>
+<span class="keyword">echo</span> <span class="string">&#39;export HIP_VISIBLE_DEVICES=0&#39;</span> &gt;&gt; ~/.bashrc
+<span class="keyword">echo</span> <span class="string">&#39;export ROCR_VISIBLE_DEVICES=0&#39;</span> &gt;&gt; ~/.bashrc
+<span class="keyword">source</span> ~/.bashrc</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- PyTorch Installation -->
+        <div id="pytorch-install" class="subsection-header mt-12">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Installing PyTorch with ROCm Support</h3>
+        </div>
+
+        <p class="text-gray-700 mb-6">
+          Install PyTorch specifically compiled for ROCm to enable AMD GPU acceleration.
+        </p>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Installing PyTorch for ROCm 6.0</h4>
+            <p class="text-gray-700 mb-4">
+              Use the custom PyTorch repository for ROCm 6.0 compatibility <a href="https://blog.csdn.net/2401_83179994/article/details/152044961" class="citation">[66]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Install PyTorch with ROCm support</span>
+<span class="keyword">pip3 install</span> torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm6.0</pre>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Verifying PyTorch Installation</h4>
+            <p class="text-gray-700 mb-4">
+              Verify that PyTorch can detect and use your RX6800XT GPU.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Test PyTorch GPU recognition</span>
+<span class="keyword">python3</span> -c <span class="string">&#34;import torch; print(f&#39;ROCm available: {torch.cuda.is_available()}&#39;); print(f&#39;Device name: {torch.cuda.get_device_name() if torch.cuda.is_available() else &#34;None&#34;}&#39;)&#34;</span></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- YOLOv8 Setup -->
+      <section id="yolov8-setup" class="max-w-4xl mx-auto px-8 py-16">
+        <div class="section-header">
+          <h2 class="serif text-3xl font-bold text-gray-900">Setting Up YOLOv8 and Your Custom Dataset</h2>
+        </div>
+
+        <p class="text-lg text-gray-700 mb-8">
+          With the deep learning environment fully configured, the next phase involves setting up the YOLOv8 framework and preparing your custom dataset for training.
+        </p>
+
+        <!-- Framework Installation -->
+        <div id="framework-install" class="subsection-header">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Installing the Ultralytics YOLOv8 Framework</h3>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Installing the Official Package</h4>
+            <p class="text-gray-700 mb-4">
+              Install the official
+              <code class="bg-gray-100 px-2 py-1 rounded">ultralytics</code> package from PyPI <a href="https://blog.csdn.net/huangzhe0701/article/details/145991658" class="citation">[57]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Install YOLOv8 framework</span>
+<span class="keyword">pip install</span> ultralytics</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dataset Preparation -->
+        <div id="dataset-prep" class="subsection-header mt-12">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Preparing Your Labeled Dataset</h3>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Dataset Directory Structure</h4>
+            <p class="text-gray-700 mb-4">
+              Organize your dataset according to YOLOv8&#39;s expected structure <a href="https://blog.csdn.net/huangzhe0701/article/details/145991658" class="citation">[57]</a>.
+            </p>
+            <div class="bg-gray-50 border rounded-lg p-4">
+              <pre class="text-sm text-gray-700">dataset/
+├── images/
+│   ├── train/
+│   │   ├── image_001.jpg
+│   │   └── image_002.jpg
+│   └── val/
+│       ├── image_101.jpg
+│       └── image_102.jpg
+└── labels/
+    ├── train/
+    │   ├── image_001.txt
+    │   └── image_002.txt
+    └── val/
+        ├── image_101.txt
+        └── image_102.txt</pre>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Creating
+              <code>data.yaml</code> Configuration File
+            </h4>
+            <p class="text-gray-700 mb-4">
+              Create a YAML configuration file to specify dataset paths and classes <a href="https://blog.csdn.net/huangzhe0701/article/details/145991658" class="citation">[57]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># data.yaml example</span>
+<span class="keyword">path:</span> /path/to/your/dataset
+<span class="keyword">train:</span> images/train
+<span class="keyword">val:</span> images/val
+
+<span class="keyword">nc:</span> 2  <span class="comment"># number of classes</span>
+<span class="keyword">names:</span> [&#39;cat&#39;, &#39;dog&#39;]</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Training Process -->
+      <section id="training" class="max-w-4xl mx-auto px-8 py-16 bg-white">
+        <div class="section-header">
+          <h2 class="serif text-3xl font-bold text-gray-900">Running the Training Process</h2>
+        </div>
+
+        <p class="text-lg text-gray-700 mb-8">
+          With the environment prepared and dataset configured, you are now ready to start training your custom YOLOv8 model.
+        </p>
+
+        <!-- Training Command -->
+        <div id="training-command" class="subsection-header">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Constructing the Training Command</h3>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Basic Training Command</h4>
+            <p class="text-gray-700 mb-4">
+              Execute the training command with essential parameters <a href="https://blog.csdn.net/huangzhe0701/article/details/145991658" class="citation">[57]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Start YOLOv8 training</span>
+<span class="keyword">yolo train</span> data=path/to/your/data.yaml model=yolov8n.pt epochs=100 imgsz=640</pre>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Explicit Task Specification</h4>
+            <p class="text-gray-700 mb-4">
+              For clarity, you can explicitly specify the detection task <a href="https://blog.roboflow.com/how-to-train-yolov8-on-a-custom-dataset/" class="citation">[55]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Explicit detection training command</span>
+<span class="keyword">yolo detect train</span> data=path/to/your/data.yaml model=yolov8n.pt epochs=100 imgsz=640</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Monitoring -->
+        <div id="monitoring" class="subsection-header mt-12">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Monitoring Training Progress</h3>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Real-Time Metrics</h4>
+            <p class="text-gray-700 mb-4">
+              Monitor training progress through terminal output showing loss values, precision, recall, and mAP metrics <a href="https://towardsdatascience.com/the-comprehensive-guide-to-training-and-running-yolov8-models-on-custom-datasets-22946da259c3/" class="citation">[59]</a>.
+            </p>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Training Results</h4>
+            <p class="text-gray-700 mb-4">
+              Training results, model checkpoints, and visualizations are saved in the
+              <code class="bg-gray-100 px-2 py-1 rounded">runs/detect/train</code> directory <a href="https://towardsdatascience.com/the-comprehensive-guide-to-training-and-running-yolov8-models-on-custom-datasets-22946da259c3/" class="citation">[59]</a>.
+            </p>
+            <ul class="list-disc list-inside space-y-1 text-gray-700">
+              <li>
+                <code class="bg-gray-100 px-2 py-1 rounded">best.pt</code> - Best performing model weights
+              </li>
+              <li>
+                <code class="bg-gray-100 px-2 py-1 rounded">last.pt</code> - Final epoch model weights
+              </li>
+              <li>
+                <code class="bg-gray-100 px-2 py-1 rounded">results.png</code> - Training metrics visualization
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Optimization -->
+      <section id="optimization" class="max-w-4xl mx-auto px-8 py-16">
+        <div class="section-header">
+          <h2 class="serif text-3xl font-bold text-gray-900">Optimizing Performance for the RX6800XT</h2>
+        </div>
+
+        <p class="text-lg text-gray-700 mb-8">
+          To fully leverage the power of the RX6800XT, it&#39;s important to apply specific optimization techniques designed for ROCm and your GPU architecture.
+        </p>
+
+        <!-- ROCm Features -->
+        <div id="rocm-features" class="subsection-header">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Leveraging ROCm-Specific Features</h3>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Composable Kernel (CK) Acceleration</h4>
+            <p class="text-gray-700 mb-4">
+              CK provides highly optimized GPU kernels for deep learning operations. Enable ROCm backend for Triton compiler <a href="https://community.frame.work/t/installing-rocm-hiplib-on-ubuntu-22-04/50412" class="citation">[61]</a>.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Enable ROCm backend for Triton</span>
+<span class="keyword">export</span> TRITON_USE_ROCM=ON</pre>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Mixed Precision Training</h4>
+            <p class="text-gray-700 mb-4">
+              Utilize FP16 mixed precision training for significant speedup and memory reduction <a href="https://community.frame.work/t/installing-rocm-hiplib-on-ubuntu-22-04/50412" class="citation">[61]</a>.
+            </p>
+            <div class="highlight-box">
+              <p class="text-gray-700">
+                PyTorch&#39;s
+                <code class="bg-gray-100 px-2 py-1 rounded">autocast</code> context manager automatically handles mixed precision training. This feature is particularly effective on modern GPUs like the RX6800XT.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced Techniques -->
+        <div id="advanced-tech" class="subsection-header mt-12">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Advanced Training Techniques</h3>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Multi-GPU Training with DDP</h4>
+            <p class="text-gray-700 mb-4">
+              Scale training across multiple AMD GPUs using Distributed Data Parallel for faster processing.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Multi-GPU training example</span>
+<span class="keyword">yolo train</span> data=path/to/data.yaml model=yolov8n.pt epochs=100 imgsz=640 device=0,1,2,3</pre>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Optimal Batch Size Configuration</h4>
+            <p class="text-gray-700 mb-4">
+              Adjust batch size to maximize VRAM usage on your RX6800XT (16GB). Monitor memory usage with
+              <code class="bg-gray-100 px-2 py-1 rounded">rocm-smi</code> during training.
+            </p>
+            <div class="code-block">
+              <pre><span class="comment"># Monitor GPU memory usage during training</span>
+<span class="keyword">watch</span> -n 1 rocm-smi</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Troubleshooting -->
+        <div id="troubleshooting" class="subsection-header mt-12">
+          <h3 class="serif text-2xl font-semibold text-gray-900">Troubleshooting Common Issues</h3>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Resolving Segmentation Faults</h4>
+            <p class="text-gray-700 mb-4">
+              Segmentation faults often indicate compatibility issues. Verify your environment setup <a href="https://community.frame.work/t/installing-rocm-hiplib-on-ubuntu-22-04/50412" class="citation">[61]</a>.
+            </p>
+            <div class="highlight-box">
+              <h5 class="font-semibold mb-2">Common Solutions:</h5>
+              <ul class="space-y-1 text-gray-700">
+                <li>• Verify
+                  <code class="bg-gray-100 px-2 py-1 rounded">HSA_OVERRIDE_GFX_VERSION=10.3.0</code> is set
+                </li>
+                <li>• Ensure PyTorch is installed for the correct ROCm version</li>
+                <li>• Check GPU driver compatibility</li>
+                <li>• Validate dataset paths and formats</li>
+              </ul>
+            </div>
+          </div>
+
+          <div>
+            <h4 class="font-semibold text-gray-900 mb-3">Addressing Performance Bottlenecks</h4>
+            <p class="text-gray-700 mb-4">
+              Low GPU utilization may indicate system bottlenecks. Common causes include:
+            </p>
+            <div class="grid md:grid-cols-2 gap-4">
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <h5 class="font-semibold mb-2">Data Loading</h5>
+                <p class="text-sm text-gray-700">Increase
+                  <code class="bg-gray-100 px-1 rounded">workers</code> parameter for faster data loading
+                </p>
+              </div>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <h5 class="font-semibold mb-2">Storage Speed</h5>
+                <p class="text-sm text-gray-700">Move dataset to SSD for improved read performance</p>
+              </div>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <h5 class="font-semibold mb-2">Model Size</h5>
+                <p class="text-sm text-gray-700">Use larger models (yolov8s/l/x) to better utilize GPU</p>
+              </div>
+              <div class="bg-gray-50 p-4 rounded-lg">
+                <h5 class="font-semibold mb-2">Batch Size</h5>
+                <p class="text-sm text-gray-700">Increase batch size to maximize memory usage</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="max-w-4xl mx-auto px-8 py-16 border-t border-gray-200">
+        <div class="text-center space-y-4">
+          <h3 class="serif text-xl font-semibold text-gray-900">References</h3>
+          <div class="text-sm text-gray-600 space-y-2">
+            <p>[55] <a href="https://blog.roboflow.com/how-to-train-yolov8-on-a-custom-dataset/" class="citation">Roboflow - How to Train YOLOv8 on a Custom Dataset</a>
+            </p>
+            <p>[56] <a href="https://medium.com/@amit25173/fine-tuning-yolov8-a-practical-guide-61343dada5c1" class="citation">Medium - Fine-Tuning YOLOv8: A Practical Guide</a>
+            </p>
+            <p>[57] <a href="https://blog.csdn.net/huangzhe0701/article/details/145991658" class="citation">CSDN - YOLOv8 Training Guide</a>
+            </p>
+            <p>[59] <a href="https://towardsdatascience.com/the-comprehensive-guide-to-training-and-running-yolov8-models-on-custom-datasets-22946da259c3/" class="citation">Towards Data Science - Comprehensive Guide to YOLOv8</a>
+            </p>
+            <p>[61] <a href="https://community.frame.work/t/installing-rocm-hiplib-on-ubuntu-22-04/50412" class="citation">Framework Community - Installing ROCm on Ubuntu 22.04</a>
+            </p>
+            <p>[63] <a href="https://blog.csdn.net/dr_chenseu/article/details/137966963" class="citation">CSDN - ROCm Installation Guide</a>
+            </p>
+            <p>[66] <a href="https://blog.csdn.net/2401_83179994/article/details/152044961" class="citation">CSDN - ROCm Configuration Tutorial</a>
+            </p>
+          </div>
+        </div>
+      </footer>
+    </main>
+
+    <script>
+        // Table of Contents Active Link
+        function updateActiveLink() {
+            const sections = document.querySelectorAll('section[id]');
+            const tocLinks = document.querySelectorAll('.toc-link');
+            
+            let current = '';
+            sections.forEach(section => {
+                const rect = section.getBoundingClientRect();
+                if (rect.top <= 100) {
+                    current = section.id;
+                }
+            });
+            
+            tocLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // Smooth scrolling for TOC links
+        document.querySelectorAll('.toc-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href').substring(1);
+                const targetSection = document.getElementById(targetId);
+                if (targetSection) {
+                    targetSection.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Mobile menu toggle
+        function toggleMobileMenu() {
+            const toc = document.querySelector('.toc-fixed');
+            toc.classList.toggle('open');
+        }
+
+        // Close mobile menu when clicking outside
+        function closeMobileMenu(event) {
+            const toc = document.querySelector('.toc-fixed');
+            const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+            
+            // Check if click is outside TOC and not on toggle button
+            if (toc.classList.contains('open') && 
+                !toc.contains(event.target) && 
+                event.target !== mobileMenuToggle) {
+                toc.classList.remove('open');
+            }
+        }
+
+        // Initialize mobile menu toggle
+        document.getElementById('mobile-menu-toggle').addEventListener('click', toggleMobileMenu);
+        
+        // Add click event listener to close menu when clicking outside
+        document.addEventListener('click', closeMobileMenu);
+        
+        // Prevent closing when clicking inside TOC
+        document.querySelector('.toc-fixed').addEventListener('click', function(event) {
+            event.stopPropagation();
+        });
+
+        // Update active link on scroll
+        window.addEventListener('scroll', updateActiveLink);
+        
+        // Initial active link update
+        updateActiveLink();
+    </script>
+  
+
+</body></html>
